@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Генератор .SRT субтитров для CapCut</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid #333;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 20px;
+            text-align: center;
+            color: #34c759;
+            letter-spacing: 0.5px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+        .input-group label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #aaa;
+        }
+        input, select {
+            background: #2b2b2b;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            border-color: #34c759;
+        }
+        button {
+            background: #34c759;
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            box-shadow: 0 4px 10px rgba(52, 199, 89, 0.2);
+        }
+        button:hover {
+            background: #28a745;
+        }
+        /* Скрытая линейка для точного замера пикселей */
+        #ruler {
+            position: absolute;
+            visibility: hidden;
+            height: auto;
+            width: auto;
+            white-space: pre;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ruler"></div>
+
+    <div class="container">
+        <h2>Генератор .SRT для CapCut</h2>
+        
+        <div class="input-group">
+            <label for="word1">Первое слово (Иностранное)</label>
+            <input type="text" id="word1" value="" placeholder="Введите исходный текст">
+        </div>
+        
+        <div class="input-group">
+            <label for="word2">Второе слово (Понятное)</label>
+            <input type="text" id="word2" value="" placeholder="Введите текст перевода">
+        </div>
+        
+        <div class="input-group">
+            <label for="speedSelect">Скорость замены буквы</label>
+            <select id="speedSelect">
+                <option value="200" selected>Очень медленно (0.2 сек)</option>
+                <option value="100">Нормально (0.1 сек)</option>
+                <option value="50">Быстро (0.05 сек)</option>
+            </select>
+        </div>
+        
+        <button id="generateBtn">Скачать .SRT файл</button>
+    </div>
+
+<script>
+function formatSrtTime(ms) {
+    let seconds = Math.floor(ms / 1000);
+    let milliseconds = ms % 1000;
+    let minutes = Math.floor(seconds / 60);
+    seconds = seconds % 60;
+    let hours = Math.floor(minutes / 60);
+    minutes = minutes % 60;
+
+    const pad = (num, val) => String(num).padStart(val, '0');
+    return `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)},${pad(milliseconds, 3)}`;
+}
+
+function getTextWidth(text, fontStyle) {
+    const ruler = document.getElementById('ruler');
+    ruler.style.font = fontStyle;
+    ruler.innerText = text;
+    return ruler.clientWidth;
+}
+
+function getInvisiblePadding(targetWidthPx, fontStyle, emW, enW) {
+    const emSpace = "\u2003";
+    const enSpace = "\u2002";
+    let currentWidth = 0;
+    let result = "";
+    
+    while (currentWidth + emW <= targetWidthPx) {
+        result += emSpace;
+        currentWidth += emW;
+    }
+    while (currentWidth + enW <= targetWidthPx) {
+        result += enSpace;
+        currentWidth += enW;
+    }
+    return result;
+}
+
+document.getElementById('generateBtn').addEventListener('click', () => {
+    const word1 = document.getElementById('word1').value || ' ';
+    const word2 = document.getElementById('word2').value || ' ';
+    const stepDuration = parseInt(document.getElementById('speedSelect').value);
+    
+    const chars1 = Array.from(word1);
+    const chars2 = Array.from(word2);
+    
+    const maxLen = Math.max(chars1.length, chars2.length);
+    const animSteps = chars2.length;
+    
+    let currentTimeMs = 0;
+    let srtContent = "";
+    let srtIndex = 1;
+
+    const targetFont = "24px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    const emSpace = "\u2003"; 
+    const enSpace = "\u2002"; 
+    
+    const emW = getTextWidth(emSpace, targetFont) || 12;
+    const enW = getTextWidth(enSpace, targetFont) || 6;
+
+    // 1. Стартовый кадр
+    srtContent += `${srtIndex}\n`;
+    srtContent += `${formatSrtTime(currentTimeMs)} --> ${formatSrtTime(currentTimeMs + stepDuration)}\n`;
+    srtContent += `${word1}\n\n`;
+    currentTimeMs += stepDuration;
+    srtIndex++;
+
+    // 2. Линейный накат перевода
+    for (let i = 0; i < animSteps; i++) {
+        let currentText = "";
+        let printedPart = chars2.slice(0, i + 1).join('');
+        let isTailCut = false;
+
+        if (chars1.length > chars2.length) {
+            if (i === animSteps - 1) {
+                let remainingTail = chars1.slice(i + 1).join('');
+                let tailWidthPx = getTextWidth(remainingTail, targetFont);
+                let invisibleFix = getInvisiblePadding(tailWidthPx, targetFont, emW, enW);
+                
+                currentText = printedPart + invisibleFix;
+                isTailCut = true;
+            } else {
+                let originalTail = chars1.slice(i + 1).join('');
+                currentText = printedPart + originalTail;
+            }
+        } else {
+            if (i + 1 < chars1.length) {
+                let originalTail = chars1.slice(i + 1).join('');
+                currentText = printedPart + originalTail;
+            } else {
+                currentText = printedPart;
+                isTailCut = true; 
+            }
+        }
+        
+        if (!isTailCut && i % 2 === 0 && i < animSteps - 1) {
+            currentText += emSpace;
+        }
+        
+        srtContent += `${srtIndex}\n`;
+        srtContent += `${formatSrtTime(currentTimeMs)} --> ${formatSrtTime(currentTimeMs + stepDuration)}\n`;
+        srtContent += `${currentText}\n\n`;
+        
+        currentTimeMs += stepDuration;
+        srtIndex++;
+    }
+
+    // 3. Статичная фиксация перевода на 1 секунду
+    const endDuration = 1000;
+    let finalCleanText = word2;
+    if (chars1.length > chars2.length) {
+        let finalTail = chars1.slice(animSteps).join('');
+        let finalTailWidthPx = getTextWidth(finalTail, targetFont);
+        finalCleanText = word2 + getInvisiblePadding(finalTailWidthPx, targetFont, emW, enW);
+    }
+    
+    srtContent += `${srtIndex}\n`;
+    srtContent += `${formatSrtTime(currentTimeMs)} --> ${formatSrtTime(currentTimeMs + endDuration)}\n`;
+    srtContent += `${finalCleanText}\n`;
+
+    const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = word2.replace(/[^a-zа-яё0-9]/gi, '_').substring(0, 10) || 'kiroshi';
+    a.download = `kiroshi_scissors_${safeName}.srt`.toLowerCase();
+    a.click();
+    URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
