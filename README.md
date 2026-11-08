@@ -1,4 +1,4 @@
-# 👁️ Cyberpunk 2077 Kiroshi HUD .SRT Generator (Left-Aligned Edition)
+# 👁️ Cyberpunk 2077 Kiroshi HUD .SRT Generator
 
 Автономный локальный веб-генератор субтитров, воссоздающий оригинальный визуальный эффект дешифровки и перевода из военного импланта **Kiroshi HUD** в игре *Cyberpunk 2077*. Специально разработан и оптимизирован для импорта в видеоредактор **CapCut**.
 
