@@ -71,20 +71,9 @@
         button:hover {
             background: #28a745;
         }
-        /* Скрытая линейка для точного замера пикселей */
-        #ruler {
-            position: absolute;
-            visibility: hidden;
-            height: auto;
-            width: auto;
-            white-space: pre;
-            font-size: 24px;
-        }
     </style>
 </head>
 <body>
-
-    <div id="ruler"></div>
 
     <div class="container">
         <h2>Генератор .SRT для CapCut</h2>
@@ -124,30 +113,6 @@ function formatSrtTime(ms) {
     return `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)},${pad(milliseconds, 3)}`;
 }
 
-function getTextWidth(text, fontStyle) {
-    const ruler = document.getElementById('ruler');
-    ruler.style.font = fontStyle;
-    ruler.innerText = text;
-    return ruler.clientWidth;
-}
-
-function getInvisiblePadding(targetWidthPx, fontStyle, emW, enW) {
-    const emSpace = "\u2003";
-    const enSpace = "\u2002";
-    let currentWidth = 0;
-    let result = "";
-    
-    while (currentWidth + emW <= targetWidthPx) {
-        result += emSpace;
-        currentWidth += emW;
-    }
-    while (currentWidth + enW <= targetWidthPx) {
-        result += enSpace;
-        currentWidth += enW;
-    }
-    return result;
-}
-
 document.getElementById('generateBtn').addEventListener('click', () => {
     const word1 = document.getElementById('word1').value || ' ';
     const word2 = document.getElementById('word2').value || ' ';
@@ -156,6 +121,7 @@ document.getElementById('generateBtn').addEventListener('click', () => {
     const chars1 = Array.from(word1);
     const chars2 = Array.from(word2);
     
+    // Анимация шагает строго по МАКСИМАЛЬНОЙ длине, чтобы дать длинному переводу полностью напечататься
     const maxLen = Math.max(chars1.length, chars2.length);
     const animSteps = chars2.length;
     
@@ -163,49 +129,51 @@ document.getElementById('generateBtn').addEventListener('click', () => {
     let srtContent = "";
     let srtIndex = 1;
 
-    const targetFont = "24px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    const emSpace = "\u2003"; 
-    const enSpace = "\u2002"; 
-    
-    const emW = getTextWidth(emSpace, targetFont) || 12;
-    const enW = getTextWidth(enSpace, targetFont) || 6;
+    const emSpace = "\u2003"; // Прозрачный маркер для микро-вибрации правого края
 
-    // 1. Стартовый кадр
+    // 1. Стартовый кадр (чистый иностранный оригинал)
     srtContent += `${srtIndex}\n`;
     srtContent += `${formatSrtTime(currentTimeMs)} --> ${formatSrtTime(currentTimeMs + stepDuration)}\n`;
     srtContent += `${word1}\n\n`;
     currentTimeMs += stepDuration;
     srtIndex++;
 
-    // 2. Линейный накат перевода
-    for (let i = 0; i < animSteps; i++) {
+    // 2. Линейный накат перевода ячейка в ячейку
+    for (let i = 0; i < maxLen; i++) {
         let currentText = "";
+        
+        // Понятная часть плавно печатается слева направо
         let printedPart = chars2.slice(0, i + 1).join('');
+        
+        let rightPart = "";
         let isTailCut = false;
 
         if (chars1.length > chars2.length) {
-            if (i === animSteps - 1) {
-                let remainingTail = chars1.slice(i + 1).join('');
-                let tailWidthPx = getTextWidth(remainingTail, targetFont);
-                let invisibleFix = getInvisiblePadding(tailWidthPx, targetFont, emW, enW);
-                
-                currentText = printedPart + invisibleFix;
+            // ЕСЛИ ИНОСТРАННЫЙ ТЕКСТ ДЛИННЕЕ (ДЛИННОЕ -> ТЕКСТ)
+            if (i === animSteps - 1 || i === maxLen - 1) {
+                // Эффект ножниц: как только перевод готов, иностранный кончик удаляется разом из кода целиком
+                rightPart = "";
                 isTailCut = true;
-            } else {
-                let originalTail = chars1.slice(i + 1).join('');
-                currentText = printedPart + originalTail;
+            } else if (i < animSteps - 1) {
+                // До этого момента иноязычный хвост неподвижно стоит на своих позициях справа
+                rightPart = chars1.slice(i + 1).join('');
             }
         } else {
+            // ЕСЛИ ПОНЯТНЫЙ ТЕКСТ ДЛИННЕЕ (КОТ -> АНИМАЦИЯ)
             if (i + 1 < chars1.length) {
-                let originalTail = chars1.slice(i + 1).join('');
-                currentText = printedPart + originalTail;
+                rightPart = chars1.slice(i + 1).join('');
             } else {
-                currentText = printedPart;
+                // Иностранный текст закончился в своём темпе, перевод спокойно дописывается дальше
+                rightPart = "";
                 isTailCut = true; 
             }
         }
         
-        if (!isTailCut && i % 2 === 0 && i < animSteps - 1) {
+        // Склеиваем строку
+        currentText = printedPart + rightPart;
+        
+        // ТРЯСКА СТРОКИ: подмешивается в самый конец строки только на промежуточных кадрах дешифровки
+        if (!isTailCut && i % 2 === 0 && i < maxLen - 1) {
             currentText += emSpace;
         }
         
@@ -217,25 +185,19 @@ document.getElementById('generateBtn').addEventListener('click', () => {
         srtIndex++;
     }
 
-    // 3. Статичная фиксация перевода на 1 секунду
+    // 3. Статичная фиксация готового перевода на 1 секунду (без вибрации, текст замер)
     const endDuration = 1000;
-    let finalCleanText = word2;
-    if (chars1.length > chars2.length) {
-        let finalTail = chars1.slice(animSteps).join('');
-        let finalTailWidthPx = getTextWidth(finalTail, targetFont);
-        finalCleanText = word2 + getInvisiblePadding(finalTailWidthPx, targetFont, emW, enW);
-    }
-    
     srtContent += `${srtIndex}\n`;
     srtContent += `${formatSrtTime(currentTimeMs)} --> ${formatSrtTime(currentTimeMs + endDuration)}\n`;
-    srtContent += `${finalCleanText}\n`;
+    srtContent += `${word2}\n`;
 
+    // Скачивание готового .SRT файла
     const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const safeName = word2.replace(/[^a-zа-яё0-9]/gi, '_').substring(0, 10) || 'kiroshi';
-    a.download = `kiroshi_scissors_${safeName}.srt`.toLowerCase();
+    a.download = `kiroshi_left_${safeName}.srt`.toLowerCase();
     a.click();
     URL.revokeObjectURL(url);
 });
